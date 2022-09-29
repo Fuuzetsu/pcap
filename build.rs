@@ -3,6 +3,8 @@ use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::path::PathBuf;
 
+extern crate pkg_config;
+
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct Version {
     major: usize,
@@ -131,12 +133,16 @@ fn main() {
     println!("cargo:rerun-if-env-changed=LIBPCAP_LIBDIR");
     println!("cargo:rerun-if-env-changed=LIBPCAP_VER");
 
-    let mut libdirpath: Option<PathBuf> = None;
-    if let Ok(libdir) = env::var("LIBPCAP_LIBDIR") {
-        println!("cargo:rustc-link-search=native={}", libdir);
-        libdirpath = Some(PathBuf::from(&libdir));
-    }
+    let version = if let Ok(library) = pkg_config::probe_library("libpcap") {
+        Version::parse(&library.version).unwrap()
+    } else {
+        let mut libdirpath: Option<PathBuf> = None;
+        if let Ok(libdir) = env::var("LIBPCAP_LIBDIR") {
+            println!("cargo:rustc-link-search=native={}", libdir);
+            libdirpath = Some(PathBuf::from(&libdir));
+        }
+        get_pcap_lib_version(libdirpath).unwrap()
+    };
 
-    let version = get_pcap_lib_version(libdirpath).unwrap();
     emit_cfg_flags(version);
 }
